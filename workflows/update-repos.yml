@@ -1,0 +1,39 @@
+name: Update Repository List
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get Repo List and Update README
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Organization内の全パブリックリポジトリを取得してMarkdownリスト化
+          REPOS=$(gh repo list ${{ github.repository_owner }} --public --json name,description,url --limit 100 \
+            --template '{{range .}}* [{{.name}}]({{.url}}){{if .description}} - {{.description}}{{end}}{{"\n"}}{{end}}')
+
+          # README内のマーカーに挟まれた部分を置換
+          sed -i "/<!-- REPO_LIST_START -->/,/<!-- REPO_LIST_END -->/ {
+            /<!-- REPO_LIST_START -->/ n
+            /<!-- REPO_LIST_END -->/ ! d
+          }" profile/README.md
+          
+          # 取得したリストを挿入
+          sed -i "/<!-- REPO_LIST_START -->/ a $REPOS" profile/README.md
+
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add profile/README.md
+          git commit -m "docs: update repository list" || exit 0
+          git push
